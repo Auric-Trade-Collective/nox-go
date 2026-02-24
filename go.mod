@@ -1,3 +1,3 @@
-module Auric-Trade-Collective/nox-go
+module github.com/Auric-Trade-Collective/nox-go
 
 go 1.25.0
