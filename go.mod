@@ -1,3 +1,3 @@
-module YendisFish/nox-go
+module Auric-Trade-Collective/nox-go
 
 go 1.25.0
