@@ -129,7 +129,7 @@ func (resp *HttpResponse) WriteJson(dat any) {
 }
 
 //export CreateNoxApi
-func CreateNoxApi(endp *C.NoxEndpointCollection, fn C.createEndpoint) {
+func CreateNoxApi(endp *C.NoxEndpointCollection) {
 	C.NoxMain()
 
 	if nox == nil {
@@ -137,10 +137,21 @@ func CreateNoxApi(endp *C.NoxEndpointCollection, fn C.createEndpoint) {
 	}
 
 
-	for k, _ := range nox.Endpoints {
+	for k, v := range nox.Endpoints {
 		cstr := C.CString(k)
 
-		C.InvokeEndp(fn, endp, cstr, (*[0]byte)(unsafe.Pointer(C.GetInvokeGo())))
+		for k2, _ := range v {
+			var method int
+			switch k2 {
+			case http.MethodGet: method = 0
+			case http.MethodPost: method = 1
+			case http.MethodPut: method = 2
+			case http.MethodDelete: method = 3
+			}
+
+			C.InvokeEndp(C.int(method), endp, cstr, (*[0]byte)(unsafe.Pointer(C.GetInvokeGo())))
+		}
+
 		C.free(unsafe.Pointer(cstr))
 	}
 }

@@ -25,6 +25,7 @@ typedef void (*apiCallback)(HttpResponse *, HttpRequest *);
 typedef struct {
     char *endpoint;
     apiCallback callback;
+    int method;
 } NoxEndpoint;
 
 
@@ -35,7 +36,7 @@ typedef struct {
 } NoxEndpointCollection;
 
 typedef void (*createEndpoint)(NoxEndpointCollection*, char*, apiCallback);
-typedef void (*createNox)(NoxEndpointCollection*, createEndpoint);
+typedef void (*createNox)(NoxEndpointCollection*);
 
 static inline char * SanitizePath(char *buff) {
     if(buff == NULL) {
@@ -60,9 +61,9 @@ static inline char * SanitizePath(char *buff) {
     return buff;
 }
 
-static inline void CreateNoxEndpoint(NoxEndpointCollection *coll, char *endpoint, apiCallback callback) {
+static inline void CreateNoxEndpoint(NoxEndpointCollection *coll, char *endpoint, apiCallback callback, int method) {
     char *sEndp = SanitizePath(strdup(endpoint));
-    NoxEndpoint endp = { .endpoint = sEndp, .callback = callback };
+    NoxEndpoint endp = { .endpoint = sEndp, .callback = callback, .method = method};
     
     NoxEndpoint *ep = (NoxEndpoint *)malloc(sizeof(NoxEndpoint) * (coll->endpointCount + 1));
     memcpy(ep, coll->endpoints, sizeof(NoxEndpoint) * coll->endpointCount);
@@ -78,8 +79,8 @@ static inline void InvokeApiCallback(apiCallback cb, HttpResponse *resp, HttpReq
     cb(resp, req);
 }
 
-static inline void InvokeEndp(createEndpoint cb, NoxEndpointCollection *coll, char *endp, apiCallback fun) {
-    cb(coll, endp, fun);
+static inline void InvokeEndp(int method, NoxEndpointCollection *coll, char *endp, apiCallback fun) {
+    CreateNoxEndpoint(coll, endp, fun, method);
 }
 
 __attribute__((weak))
