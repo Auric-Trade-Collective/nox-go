@@ -13,6 +13,7 @@ typedef struct {
 
 typedef struct {
     char *endpoint;
+    char *method;
 } HttpRequest;
 
 typedef struct {

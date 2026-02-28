@@ -9,6 +9,7 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"unsafe"
 )
@@ -17,7 +18,7 @@ var Construct func()
 var nox *Nox = nil
 
 type Nox struct {
-	Endpoints map[string]func(*HttpResponse, *HttpRequest)
+	Endpoints map[string]map[string]func(*HttpResponse, *HttpRequest)
 }
 
 
@@ -27,20 +28,57 @@ func InitNox() *Nox {
 	}
 
 	nx := &Nox {
-		Endpoints: make(map[string]func(*HttpResponse, *HttpRequest)),
+		Endpoints: make(map[string]map[string]func(*HttpResponse, *HttpRequest)), 
 	}
 
 	nox = nx
 	return nx
 }
 
-func (nx *Nox) CreateEndpoint(path string, fn func(*HttpResponse, *HttpRequest)) {
-	nx.Endpoints[path] = fn
+func (nx *Nox) CreateGet(path string, fn func(*HttpResponse, *HttpRequest)) {
+	endp, ok := nx.Endpoints[path]
+	if !ok {
+		nx.Endpoints[path] = make(map[string]func(*HttpResponse, *HttpRequest))
+		endp = nx.Endpoints[path]
+	}
+	_ = endp
+	nx.Endpoints[path][http.MethodGet] = fn
+}
+
+func (nx *Nox) CreatePost(path string, fn func(*HttpResponse, *HttpRequest)) {
+	endp, ok := nx.Endpoints[path]
+	if !ok {
+		nx.Endpoints[path] = make(map[string]func(*HttpResponse, *HttpRequest))
+		endp = nx.Endpoints[path]
+	}
+	_ = endp
+	nx.Endpoints[path][http.MethodPost] = fn
+}
+
+func (nx *Nox) CreatePut(path string, fn func(*HttpResponse, *HttpRequest)) {
+	endp, ok := nx.Endpoints[path]
+	if !ok {
+		nx.Endpoints[path] = make(map[string]func(*HttpResponse, *HttpRequest))
+		endp = nx.Endpoints[path]
+	}
+	_ = endp
+	nx.Endpoints[path][http.MethodPut] = fn
+}
+
+func (nx *Nox) CreateDelete(path string, fn func(*HttpResponse, *HttpRequest)) {
+	endp, ok := nx.Endpoints[path]
+	if !ok {
+		nx.Endpoints[path] = make(map[string]func(*HttpResponse, *HttpRequest))
+		endp = nx.Endpoints[path]
+	}
+	_ = endp
+	nx.Endpoints[path][http.MethodDelete] = fn
 }
 
 type HttpRequest struct {
 	handle unsafe.Pointer
 	Endpoint string
+	Method string
 }
 
 type HttpResponse struct {
@@ -114,12 +152,15 @@ func EndpointHandler(resp *C.HttpResponse, req *C.HttpRequest) {
 	mReq := &HttpRequest{
 		handle: unsafe.Pointer(req),
 		Endpoint: goPath,
+		Method: C.GoString(req.method),
 	}
 	mResp := &HttpResponse{
 		handle: unsafe.Pointer(resp),	
 	}
 
-	if fn, ok := nox.Endpoints[goPath]; ok {
-		fn(mResp, mReq)
+	if mp, ok := nox.Endpoints[goPath]; ok {
+		if fn, ok := mp[mReq.Method]; ok {
+			fn(mResp, mReq)
+		}
 	}
 }
