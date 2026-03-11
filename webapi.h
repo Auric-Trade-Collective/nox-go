@@ -12,8 +12,15 @@ typedef struct {
 } DllManager;
 
 typedef struct {
+    uintptr_t gohandle;
+
     char *endpoint;
     char *method;
+    char *remoteAddr;
+    
+    // uintptr_t headers;
+    // uintptr_t body;
+    // uintptr_t url;
 } HttpRequest;
 
 typedef struct {
@@ -28,10 +35,11 @@ typedef struct {
     int method;
 } NoxEndpoint;
 
-
+typedef int (*authCallback)(HttpRequest *);
 typedef struct {
     DllManager *dll;
     int endpointCount;
+    authCallback *auth;
     NoxEndpoint *endpoints;
 } NoxEndpointCollection;
 
@@ -63,17 +71,20 @@ static inline char * SanitizePath(char *buff) {
 
 static inline void CreateNoxEndpoint(NoxEndpointCollection *coll, char *endpoint, apiCallback callback, int method) {
     char *sEndp = SanitizePath(strdup(endpoint));
-    NoxEndpoint endp = { .endpoint = sEndp, .callback = callback, .method = method};
+    NoxEndpoint endp = { .endpoint = sEndp, .callback = callback, .method = method };
     
     NoxEndpoint *ep = (NoxEndpoint *)malloc(sizeof(NoxEndpoint) * (coll->endpointCount + 1));
-    memcpy(ep, coll->endpoints, sizeof(NoxEndpoint) * coll->endpointCount);
+
+    if(coll->endpoints != NULL) {
+        memcpy(ep, coll->endpoints, sizeof(NoxEndpoint) * coll->endpointCount);
+    }
+
     ep[coll->endpointCount] = endp;
 
     free(coll->endpoints);
     coll->endpoints = ep;
     coll->endpointCount++;
 }
-
 
 static inline void InvokeApiCallback(apiCallback cb, HttpResponse *resp, HttpRequest *req) {
     cb(resp, req);
@@ -116,17 +127,19 @@ typedef struct {
     size_t length;
     char *filename; // CSTRING, can be NULL
     NoxStreamSection section;
+    char *contentType;
 } NoxData;
 
 
-__attribute__((warning("NoxBuffer: Keep in mind the returned pointer will take ownership of the buffer passed")))
-static inline NoxData *NoxBuffer(uint8_t *buff, size_t len) {
+__attribute__((warning("NoxBuffer: Keep in mind the returned pointer will take ownership of the buffer passed to it")))
+static inline NoxData *NoxBuffer(uint8_t *buff, size_t len, char *contentType) {
     NoxData *dat = (NoxData *)malloc(sizeof(NoxData));
     dat->type = BYTES;
     dat->buff = buff;
     dat->length = len;
     dat->filename = NULL;
     dat->section = (NoxStreamSection)0;
+    dat->contentType = strdup(contentType);
 
     return dat;
 }
@@ -173,5 +186,21 @@ void WriteFile(HttpResponse *resp, NoxData *dat);
 static inline void *GetInvokeGo() {
     return (void*)InvokeGoLogic;
 }
+
+int TryGetResponseHeader(HttpResponse *resp, char *key, size_t index, char **out);
+int TrySetResponseHeader(HttpResponse *resp, char *key, char *val, int add);
+
+int TryGetRequestHeader(HttpRequest *resp, char *key, size_t index, char **out);
+int TrySetRequestHeader(HttpRequest *resp, char *key, char *val, int add);
+
+// the returned value is how many bytes are read
+size_t ReadBody(HttpRequest *req, uint8_t *buff, size_t bytesToRead);
+
+char *GetUri(HttpRequest *req, size_t *outLength);
+int TryGetUriParam(HttpRequest *req, char *key, size_t index, char **out, size_t *outLen);
+size_t GetUriParamCount(HttpRequest *req, char *paramName);
+
+char *TryGetCookie(HttpRequest *req, char *key);
+void TrySetCookie(HttpResponse *resp, char *key, char *value, char *path, long expires, bool secure, bool httponly);
 
 #endif

@@ -8,13 +8,14 @@ package noxgo
 import "C"
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
 	"unsafe"
 )
 
-var Construct func()
+// var Construct func()
 var nox *Nox = nil
 
 type Nox struct {
@@ -81,17 +82,83 @@ type HttpRequest struct {
 	Method string
 }
 
+func (req *HttpRequest) ReadBody(buff []byte) (int, error) {
+	ptr := (*C.uint8_t)(unsafe.Pointer(&buff[0]))
+	
+	cBytesRead := C.ReadBody((*C.HttpRequest)(req.handle), ptr, C.size_t(len(buff)))
+	goBytesRead := int(cBytesRead)
+
+	if goBytesRead <= 0 {
+		return 0, errors.New("Could not read bytes into buffer")
+	}
+
+	return goBytesRead, nil
+}
+
+func (req *HttpRequest) ReadAsJson(target any) error {
+	wholeBuff := []byte{}
+	for {
+		buff := [255]byte{}
+		read, err := req.ReadBody(buff[:])
+		if err != nil || read <= 0 {
+			break
+		}
+
+		wholeBuff = append(wholeBuff, buff[:read]...)
+	}
+
+	err := json.Unmarshal(wholeBuff, target)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 type HttpResponse struct {
 	handle unsafe.Pointer
 }
 
-func (resp *HttpResponse) WriteBuff(bytes *NoxBuffer) {
+func (resp *HttpResponse) GetHeader(key string, index int) string {
+	cKey := C.CString(key)
+	defer C.free(unsafe.Pointer(cKey))
+
+	var outStr *C.char
+	defer C.free(unsafe.Pointer(outStr))
+	success := C.TryGetResponseHeader((*C.HttpResponse)(resp.handle), cKey, C.size_t(index), &outStr)
+
+	if int(success) != 0 {
+		goStr := C.GoString(outStr)
+		return goStr
+	}
+
+	return ""
+}
+
+func (resp *HttpResponse) SetHeader(key string, val string) error {
+	cKey := C.CString(key)
+	cVal := C.CString(val)
+	defer C.free(unsafe.Pointer(cKey))
+	defer C.free(unsafe.Pointer(cVal))
+
+	success := C.TrySetResponseHeader((*C.HttpResponse)(resp.handle), cKey, cVal, C.int(0))
+	if success == 0 {
+		return errors.New("Could not set header " + key)
+	}
+
+	return nil
+}
+
+func (resp *HttpResponse) WriteBuff(bytes *NoxBuffer, contentType string) {
 	count := len(bytes.data)
 	if count == 0 && bytes.Length == 0 {
 		return
 	}
 
-	buff := C.NoxBuffer((*C.uint8_t)(bytes.ptr), C.size_t(bytes.Length))
+	ccType := C.CString(contentType)
+	// defer C.free(unsafe.Pointer(ccType))
+
+	buff := C.NoxBuffer((*C.uint8_t)(bytes.ptr), C.size_t(bytes.Length), ccType)
 	C.WriteMove((*C.HttpResponse)(resp.handle), buff)
 }
 
@@ -125,7 +192,7 @@ func (resp *HttpResponse) WriteJson(dat any) {
 	buff := NewBuffer(uintptr(len(json)))
 	buff.Append(json)
 
-	resp.WriteBuff(buff)
+	resp.WriteBuff(buff, "application/json")
 }
 
 //export CreateNoxApi
@@ -135,7 +202,6 @@ func CreateNoxApi(endp *C.NoxEndpointCollection) {
 	if nox == nil {
 		panic("nox-go: Could not load API, was nil")
 	}
-
 
 	for k, v := range nox.Endpoints {
 		cstr := C.CString(k)
