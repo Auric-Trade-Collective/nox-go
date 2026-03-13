@@ -82,6 +82,22 @@ type HttpRequest struct {
 	Method string
 }
 
+func (req *HttpRequest) GetUriParam(key string, num int) (string, error) {
+	cKey := C.CString(key)
+	defer C.free(unsafe.Pointer(cKey))
+
+	var readBuff *C.char
+	var buffLen C.size_t
+	succ := C.TryGetUriParam((*C.HttpRequest)(req.handle), cKey, C.size_t(num), &readBuff, &buffLen)
+
+	if succ != 1 {
+		return "", errors.New("Could not read param " + key)
+	}
+
+	retBuff := C.GoStringN(readBuff, C.int(buffLen))
+	return retBuff, nil
+}
+
 func (req *HttpRequest) ReadBody(buff []byte) (int, error) {
 	ptr := (*C.uint8_t)(unsafe.Pointer(&buff[0]))
 	
@@ -95,6 +111,7 @@ func (req *HttpRequest) ReadBody(buff []byte) (int, error) {
 	return goBytesRead, nil
 }
 
+//WARNING THIS MIGHT BE AN INFINITE LOOP! NOT SURE YET!
 func (req *HttpRequest) ReadAsJson(target any) error {
 	wholeBuff := []byte{}
 	for {
@@ -115,8 +132,40 @@ func (req *HttpRequest) ReadAsJson(target any) error {
 	return nil
 }
 
+// char *TryGetCookie(HttpRequest *req, char *key);
+func (req *HttpRequest) GetCookie(name string) (string, error) {
+	cStr := C.CString(name)
+	defer C.free(unsafe.Pointer(cStr))
+
+	cookie := C.TryGetCookie((*C.HttpRequest)(req.handle), cStr)
+	
+	if cookie != nil {
+		return C.GoString(cookie), nil 
+	}
+
+	return "", errors.New("Could not find cookie titled " + name)
+}
+
 type HttpResponse struct {
 	handle unsafe.Pointer
+}
+
+// void TrySetCookie(HttpResponse *resp, char *key, char *value, char *path, long expires, bool secure, bool httponly);
+func (resp *HttpResponse) SetCookie(key string, value string, path string, expires int64, secure bool, httponly bool) {
+	cKey := C.CString(key)
+	defer C.free(unsafe.Pointer(cKey))
+
+	cVal := C.CString(value)
+	defer C.free(unsafe.Pointer(cVal))
+
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+
+	cExp := C.long(expires)
+	cSecure := C.bool(secure)
+	cHttpOnly := C.bool(httponly)
+
+	C.TrySetCookie((*C.HttpResponse)(resp.handle), cKey, cVal, cPath, cExp, cSecure, cHttpOnly)
 }
 
 func (resp *HttpResponse) GetHeader(key string, index int) string {
