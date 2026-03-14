@@ -205,7 +205,7 @@ func (resp *HttpResponse) WriteBuff(bytes *NoxBuffer, contentType string) {
 	}
 
 	ccType := C.CString(contentType)
-	// defer C.free(unsafe.Pointer(ccType))
+	defer C.free(unsafe.Pointer(ccType))
 
 	buff := C.NoxBuffer((*C.uint8_t)(bytes.ptr), C.size_t(bytes.Length), ccType)
 	C.WriteMove((*C.HttpResponse)(resp.handle), buff)
