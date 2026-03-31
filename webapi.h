@@ -6,6 +6,7 @@
 #include <dlfcn.h> 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 typedef struct {
     void *lib_handle;
